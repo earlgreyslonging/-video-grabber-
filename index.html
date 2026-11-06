@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<meta name="theme-color" content="#101827">
+
+<title>Video Grabber</title>
+
+<style>
+
+* { box-sizing: border-box; }
+
+body {
+
+  margin: 0;
+
+  background: #101827;
+
+  color: white;
+
+  font-family: -apple-system, sans-serif;
+
+  min-height: 100vh;
+
+  padding: 30px 20px;
+
+}
+
+main {
+
+  max-width: 480px;
+
+  margin: 50px auto;
+
+}
+
+.logo { font-size: 48px; text-align: center; }
+
+h1 { text-align: center; font-size: 32px; }
+
+.subtitle { text-align: center; color: #aab5c7; }
+
+input {
+
+  width: 100%;
+
+  padding: 17px;
+
+  margin: 25px 0 12px;
+
+  border-radius: 12px;
+
+  border: 1px solid #45536a;
+
+  background: #202d40;
+
+  color: white;
+
+  font-size: 16px;
+
+}
+
+button {
+
+  width: 100%;
+
+  padding: 17px;
+
+  border: 0;
+
+  border-radius: 12px;
+
+  background: #3979f6;
+
+  color: white;
+
+  font-size: 17px;
+
+  font-weight: bold;
+
+  cursor: pointer;
+
+}
+
+#status {
+
+  margin-top: 20px;
+
+  color: #b7c5da;
+
+  text-align: center;
+
+  line-height: 1.5;
+
+}
+
+.note {
+
+  margin-top: 40px;
+
+  color: #8795a9;
+
+  font-size: 13px;
+
+  text-align: center;
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<main>
+
+  <div class="logo">⬇</div>
+
+  <h1>Video Grabber</h1>
+
+  <p class="subtitle">Paste a video link to get started</p>
+
+  <input id="videoUrl" type="url"
+
+    placeholder="Paste video URL here">
+
+  <button onclick="detectVideo()">Detect Video</button>
+
+  <div id="status">
+
+    Ready when you are.
+
+  </div>
+
+  <p class="note">
+
+    Downloads are supported only where the website
+
+    permits access. Protected streams aren't bypassed.
+
+  </p>
+
+</main>
+
+<script>
+
+function detectVideo() {
+
+  const url = document.getElementById("videoUrl").value.trim();
+
+  const status = document.getElementById("status");
+
+  if (!url) {
+
+    status.textContent = "Please paste a video link first.";
+
+    return;
+
+  }
+
+  try {
+
+    new URL(url);
+
+    status.textContent =
+
+      "Link received! Video detection will be added next.";
+
+  } catch {
+
+    status.textContent = "Please enter a valid web address.";
+
+  }
+
+}
+
+</script>
+
+</body>
+
+</html>

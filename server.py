@@ -7,19 +7,17 @@ import yt_dlp
 
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
 
 PORT = int(os.environ.get("PORT", 8001))
 
 
 def validate_url(url):
-    """Allow ordinary public HTTP and HTTPS URLs."""
     parsed = urlparse(url)
 
-    if parsed.scheme not in ("http", "https"):
-        raise ValueError("Please enter an HTTP or HTTPS URL.")
-
-    if not parsed.hostname:
-        raise ValueError("That URL is invalid.")
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("Please enter a valid HTTP or HTTPS URL.")
 
     host = parsed.hostname.lower()
 
@@ -31,7 +29,6 @@ def validate_url(url):
 
         for address in addresses:
             ip = address[4][0]
-
             if not ipaddress.ip_address(ip).is_global:
                 raise ValueError("Private network addresses are not supported.")
 
@@ -43,17 +40,10 @@ def validate_url(url):
 
 def is_x_url(url):
     host = (urlparse(url).hostname or "").lower()
-
-    return (
-        host == "x.com"
-        or host.endswith(".x.com")
-        or host == "twitter.com"
-        or host.endswith(".twitter.com")
-    )
+    return host in ("x.com", "www.x.com", "twitter.com", "www.twitter.com")
 
 
 def get_ytdlp_options():
-    """Shared settings for public video detection."""
     return {
         "quiet": True,
         "no_warnings": True,
@@ -90,7 +80,6 @@ def extract_video_formats(info):
 
         seen_urls.add(video_url)
 
-        width = item.get("width") or 0
         height = item.get("height") or 0
         bitrate = item.get("tbr") or 0
 
@@ -98,49 +87,23 @@ def extract_video_formats(info):
             "url": video_url,
             "type": "video/mp4",
             "format_id": item.get("format_id"),
-            "width": width,
+            "width": item.get("width") or 0,
             "height": height,
             "bitrate": bitrate,
             "quality": f"{height}p" if height else "MP4 video",
         })
 
     videos.sort(
-        key=lambda video: (
-            video["height"],
-            video["bitrate"]
-        ),
+        key=lambda video: (video["height"], video["bitrate"]),
         reverse=True
     )
 
     return videos
 
 
-def detect_x(url):
-    with yt_dlp.YoutubeDL(get_ytdlp_options()) as ydl:
-        info = ydl.extract_info(url, download=False)
+def detect_video(url):
+    validate_url(url)
 
-    if not info:
-        raise ValueError("X did not return video information.")
-
-    videos = extract_video_formats(info)
-
-    return {
-        "success": bool(videos),
-        "platform": "X",
-        "title": info.get("title") or "",
-        "text": info.get("description") or "",
-        "thumbnail": info.get("thumbnail") or "",
-        "duration": info.get("duration"),
-        "videos": videos,
-        "message": (
-            f"Found {len(videos)} public MP4 option(s)."
-            if videos else
-            "No publicly accessible direct MP4 formats were returned."
-        ),
-    }
-
-
-def detect_with_ytdlp(url):
     with yt_dlp.YoutubeDL(get_ytdlp_options()) as ydl:
         info = ydl.extract_info(url, download=False)
 
@@ -151,16 +114,16 @@ def detect_with_ytdlp(url):
 
     return {
         "success": bool(videos),
-        "platform": info.get("extractor_key", "Website"),
+        "platform": "X" if is_x_url(url) else info.get("extractor_key", "Website"),
         "title": info.get("title") or "Video",
         "text": info.get("description") or "",
         "thumbnail": info.get("thumbnail") or "",
         "duration": info.get("duration"),
         "videos": videos,
         "message": (
-            f"Found {len(videos)} public MP4 format(s)."
+            f"Found {len(videos)} public MP4 option(s)."
             if videos else
-            "Video recognized, but no public direct MP4 formats were found."
+            "No publicly accessible direct MP4 formats were found."
         ),
     }
 
@@ -169,12 +132,8 @@ class VideoGrabberHandler(SimpleHTTPRequestHandler):
 
     def send_json(self, data, status=200):
         body = json.dumps(data).encode("utf-8")
-
         self.send_response(status)
-        self.send_header(
-            "Content-Type",
-            "application/json; charset=utf-8"
-        )
+        self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Cache-Control", "no-store")
@@ -184,37 +143,63 @@ class VideoGrabberHandler(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header(
-            "Access-Control-Allow-Methods",
-            "GET, POST, OPTIONS"
-        )
-        self.send_header(
-            "Access-Control-Allow-Headers",
-            "Content-Type"
-        )
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
     def handle_detection(self, url):
-        validate_url(url)
+        return detect_video(url)
 
-        if is_x_url(url):
-            return detect_x(url)
+    def handle_download(self, video_url):
+        validate_url(video_url)
 
-        return detect_with_ytdlp(url)
+        # Only allow direct public HTTP(S) MP4 URLs.
+        if not video_url.lower().split("?")[0].endswith(".mp4"):
+            raise ValueError("Only direct public MP4 links can be downloaded.")
+
+        request = Request(
+            video_url,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+
+        with urlopen(request, timeout=45) as response:
+            content_type = response.headers.get("Content-Type", "").lower()
+
+            if "video/" not in content_type and "octet-stream" not in content_type:
+                raise ValueError("The source did not return a video file.")
+
+            self.send_response(200)
+            self.send_header("Content-Type", "video/mp4")
+            self.send_header(
+                "Content-Disposition",
+                'attachment; filename="Video-Grabber.mp4"'
+            )
+            self.send_header("Cache-Control", "no-store")
+
+            content_length = response.headers.get("Content-Length")
+            if content_length:
+                self.send_header("Content-Length", content_length)
+
+            self.end_headers()
+
+            while True:
+                chunk = response.read(1024 * 256)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
 
         if parsed.path == "/detect":
-            params = parse_qs(parsed.query)
             url = params.get("url", [""])[0].strip()
 
             try:
                 if not url:
                     raise ValueError("Please provide a video URL.")
 
-                result = self.handle_detection(url)
-                self.send_json(result)
+                self.send_json(self.handle_detection(url))
 
             except Exception as error:
                 self.send_json({
@@ -222,6 +207,24 @@ class VideoGrabberHandler(SimpleHTTPRequestHandler):
                     "message": str(error),
                     "videos": [],
                 }, 400)
+
+            return
+
+        if parsed.path == "/download":
+            video_url = params.get("url", [""])[0].strip()
+
+            try:
+                if not video_url:
+                    raise ValueError("Please provide a video URL.")
+
+                self.handle_download(video_url)
+
+            except Exception as error:
+                if not self.wfile.closed:
+                    self.send_json({
+                        "success": False,
+                        "message": str(error),
+                    }, 400)
 
             return
 
@@ -244,17 +247,13 @@ class VideoGrabberHandler(SimpleHTTPRequestHandler):
 
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            data = json.loads(
-                self.rfile.read(length).decode("utf-8")
-            )
-
+            data = json.loads(self.rfile.read(length).decode("utf-8"))
             url = (data.get("url") or "").strip()
 
             if not url:
                 raise ValueError("Please provide a video URL.")
 
-            result = self.handle_detection(url)
-            self.send_json(result)
+            self.send_json(self.handle_detection(url))
 
         except Exception as error:
             self.send_json({
@@ -274,7 +273,6 @@ if __name__ == "__main__":
 
     try:
         server.serve_forever()
-
     except KeyboardInterrupt:
         print("\nStopping Video Grabber server...")
         server.server_close()

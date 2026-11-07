@@ -11,7 +11,7 @@ from urllib.error import HTTPError, URLError
 
 import yt_dlp
 
-PORT = 8001
+PORT = int(os.environ.get("PORT", 8001))
 
 
 def validate_url(url):

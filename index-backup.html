@@ -1,0 +1,404 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Grabber</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 24px;
+  background: #081426;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+.container {
+  max-width: 650px;
+  margin: 30px auto;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.logo { color: white; font-size: 34px; }
+h1 { font-size: 27px; margin: 0; }
+.subtitle { color: #aab8ca; margin-top: 6px; }
+.panel {
+  background: #14243b;
+  padding: 22px;
+  border-radius: 16px;
+  margin-bottom: 20px;
+}
+input, select {
+  width: 100%;
+  padding: 14px;
+  border-radius: 9px;
+  border: 1px solid #40516b;
+  background: #0b192c;
+  color: white;
+  font-size: 15px;
+  margin: 10px 0;
+}
+button {
+  width: 100%;
+  padding: 14px;
+  margin-top: 10px;
+  border: 0;
+  border-radius: 9px;
+  background: #3478f6;
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+button.secondary { background: #263b57; }
+button:disabled { opacity: .5; cursor: wait; }
+video {
+  width: 100%;
+  margin-top: 16px;
+  border-radius: 10px;
+  background: black;
+}
+.hidden { display: none; }
+#status {
+  color: #b9d2ff;
+  margin-top: 14px;
+  overflow-wrap: anywhere;
+}
+#downloads { color: #d5dfed; }
+.note {
+  color: #aab8ca;
+  font-size: 13px;
+  line-height: 1.5;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo">★</div>
+    <div>
+      <h1>Video Grabber</h1>
+      <div class="subtitle">Detect, preview and save videos</div>
+    </div>
+  </header>
+
+  <section class="panel">
+    <h2>Find a video</h2>
+    <input id="videoUrl" type="url"
+      placeholder="Paste a direct video URL here">
+    <button id="detectButton">Detect Video</button>
+    <div id="status" role="status">Ready.</div>
+  </section>
+
+  <section id="playerArea" class="panel hidden">
+    <h2>Video Preview</h2>
+    <video id="videoPlayer" controls playsinline></video>
+    <div id="videoChoices" style="display:none; margin-top:15px;">
+  <label for="videoSelect">Choose a video:</label>
+  <select id="videoSelect" style="width:100%; padding:12px; margin-top:8px;">
+  </select>
+    </div>
+
+    <label for="quality">Video quality</label>
+    <select id="quality">
+      <option value="original">Original quality</option>
+    </select>
+
+    <button id="downloadButton">Download Video</button>
+    <button id="exportButton" class="secondary">
+      Export / Save Video
+    </button>
+  </section>
+
+  <section class="panel">
+    <h2>My Downloads</h2>
+    <div id="downloads">No downloads yet.</div>
+  </section>
+
+  <p class="note">
+    Only use direct video links that are publicly accessible and that
+    you have permission to download. This app does not bypass subscriptions,
+    login requirements, DRM, or other access restrictions.
+  </p>
+</div>
+
+<script>
+let currentUrl = "";
+
+const statusBox = document.getElementById("status");
+const playerArea = document.getElementById("playerArea");
+const videoPlayer = document.getElementById("videoPlayer");
+const videoUrl = document.getElementById("videoUrl");
+const downloadButton = document.getElementById("downloadButton");
+const exportButton = document.getElementById("exportButton");
+
+function setStatus(message) {
+  statusBox.textContent = message;
+}
+
+function getDownloadUrl() {
+  return location.origin + "/download?url=" +
+    encodeURIComponent(currentUrl);
+}
+
+async function detectVideo() {
+  const enteredUrl = videoUrl.value.trim();
+
+  if (!enteredUrl) {
+    setStatus("Please paste a website or video URL.");
+    return;
+  }
+
+  let parsed;
+
+  try {
+    parsed = new URL(enteredUrl);
+  } catch {
+    setStatus("Please enter a valid website URL.");
+    return;
+  }
+
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    setStatus("Please use an HTTP or HTTPS URL.");
+    return;
+  }
+
+  setStatus("Checking website for video sources...");
+  if (parsed.hostname === "x.com" || parsed.hostname === "www.x.com" ||
+    parsed.hostname === "twitter.com" || parsed.hostname === "www.twitter.com") {
+
+  setStatus("Checking public X video sources...");
+
+  try {
+    const response = await fetch(
+      "https://" + location.hostname.replace(/-\d+\.app\.github\.dev$/, "-8001.app.github.dev") +
+      "/detect?url=" + encodeURIComponent(enteredUrl)
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || result.error) {
+      throw new Error(result.error || "X detection failed.");
+    }
+
+    if (result.platform === "X") {
+  if (result.thumbnail) {
+    setStatus("X post recognized! Video thumbnail found.");
+  } else {
+    setStatus(result.message || "X post recognized.");
+  }
+
+  if (result.videos && result.videos.length > 0) {
+    const urls = result.videos
+      .filter(video => video.url)
+      .map(video => video.url);
+
+    if (urls.length > 0) {
+      showVideoChoices(urls);
+      setStatus("Found " + urls.length + " X video quality option(s).");
+    }
+  }
+
+  return;
+}
+
+if (!result.videos || result.videos.length === 0) {
+  setStatus("No publicly accessible video sources were found.");
+  return;
+}
+
+const urls = result.videos
+  .filter(video => video.url)
+  .map(video => video.url);
+
+showVideoChoices(urls);
+setStatus("Found " + urls.length + " video quality option(s).");
+
+  } catch (error) {
+    setStatus("X detection error: " + error.message);
+  }
+
+  return;
+}
+
+  // Direct video links can be used immediately.
+  if (/\.(mp4|webm|ogg|mov)$/i.test(parsed.pathname)) {
+    showDetectedVideo(enteredUrl);
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      location.origin + "/detect?url=" +
+      encodeURIComponent(enteredUrl)
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || result.error) {
+      throw new Error(result.error || "Website detection failed.");
+    }
+
+    if (result.type === "direct-file") {
+      showDetectedVideo(enteredUrl);
+      return;
+    }
+
+    if (result.videos && result.videos.length > 0) {
+      showVideoChoices(result.videos);
+
+      setStatus(
+        "Found " + result.videos.length +
+        " accessible video source(s). Showing the first one."
+      );
+      return;
+    }
+
+    setStatus(
+      result.message ||
+      "No directly accessible video sources were found."
+    );
+
+  } catch (error) {
+    setStatus("Detection error: " + error.message);
+  }
+}
+
+function showDetectedVideo(url) {
+  currentUrl = url;
+  videoPlayer.src = url;
+  playerArea.classList.remove("hidden");
+  document.getElementById("videoChoices").style.display = "none";
+  setStatus("Video found! You can preview or download it.");
+}
+
+function showVideoChoices(urls) {
+  const container = document.getElementById("videoChoices");
+  const select = document.getElementById("videoSelect");
+
+  select.innerHTML = "";
+
+  urls.forEach((url, index) => {
+    const option = document.createElement("option");
+    option.value = url;
+    option.textContent = "Video " + (index + 1);
+    select.appendChild(option);
+  });
+
+  container.style.display = urls.length > 1 ? "block" : "none";
+  showDetectedVideo(urls[0]);
+
+  if (urls.length > 1) {
+    container.style.display = "block";
+  }
+}
+
+document.getElementById("videoSelect").addEventListener("change", function () {
+  showDetectedVideo(this.value);
+  document.getElementById("videoChoices").style.display = "block";
+});
+
+function downloadVideo() {
+  if (!currentUrl) {
+    setStatus("Detect a video first.");
+    return;
+  }
+
+  const link = document.createElement("a");
+  link.href = getDownloadUrl();
+  link.download = "Video-Grabber.mp4";
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setStatus("Download requested. Check your browser Downloads.");
+  addDownload("Video-Grabber.mp4");
+}
+
+async function exportVideo() {
+  if (!currentUrl) {
+    setStatus("Detect a video first.");
+    return;
+  }
+
+  exportButton.disabled = true;
+  setStatus("Preparing your video...");
+
+  try {
+    const response = await fetch(getDownloadUrl());
+
+    if (!response.ok) {
+      throw new Error("The server could not retrieve the video. HTTP " +
+        response.status);
+    }
+
+    const blob = await response.blob();
+
+    if (!blob.size) {
+      throw new Error("The downloaded video was empty.");
+    }
+
+    const file = new File(
+      [blob],
+      "Video-Grabber.mp4",
+      { type: blob.type || "video/mp4" }
+    );
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: "Save Video"
+      });
+      setStatus("Share menu opened. Choose Save Video if available.");
+    } else {
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = "Video-Grabber.mp4";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      setStatus("Video downloaded. Open it to share or save it.");
+    }
+
+    addDownload("Video-Grabber.mp4");
+  } catch (error) {
+    if (error.name === "AbortError") {
+      setStatus("Export cancelled.");
+    } else {
+      setStatus("Export failed: " + error.message);
+    }
+  } finally {
+    exportButton.disabled = false;
+  }
+}
+
+function addDownload(name) {
+  const downloads = document.getElementById("downloads");
+
+  if (downloads.textContent === "No downloads yet.") {
+    downloads.textContent = "";
+  }
+
+  const item = document.createElement("div");
+  item.textContent = "✓ " + name;
+  item.style.padding = "8px 0";
+  downloads.prepend(item);
+}
+
+document.getElementById("detectButton")
+  .addEventListener("click", detectVideo);
+
+downloadButton.addEventListener("click", downloadVideo);
+exportButton.addEventListener("click", exportVideo);
+</script>
+</body>
+</html>

@@ -1,187 +1,659 @@
 <!DOCTYPE html>
-
 <html lang="en">
-
 <head>
-
-<meta charset="UTF-8">
-
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<meta name="theme-color" content="#101827">
-
-<title>Video Grabber</title>
-
-<style>
-
-* { box-sizing: border-box; }
-
-body {
-
-  margin: 0;
-
-  background: #101827;
-
-  color: white;
-
-  font-family: -apple-system, sans-serif;
-
-  min-height: 100vh;
-
-  padding: 30px 20px;
-
-}
-
-main {
-
-  max-width: 480px;
-
-  margin: 50px auto;
-
-}
-
-.logo { font-size: 48px; text-align: center; }
-
-h1 { text-align: center; font-size: 32px; }
-
-.subtitle { text-align: center; color: #aab5c7; }
-
-input {
-
-  width: 100%;
-
-  padding: 17px;
-
-  margin: 25px 0 12px;
-
-  border-radius: 12px;
-
-  border: 1px solid #45536a;
-
-  background: #202d40;
-
-  color: white;
-
-  font-size: 16px;
-
-}
-
-button {
-
-  width: 100%;
-
-  padding: 17px;
-
-  border: 0;
-
-  border-radius: 12px;
-
-  background: #3979f6;
-
-  color: white;
-
-  font-size: 17px;
-
-  font-weight: bold;
-
-  cursor: pointer;
-
-}
-
-#status {
-
-  margin-top: 20px;
-
-  color: #b7c5da;
-
-  text-align: center;
-
-  line-height: 1.5;
-
-}
-
-.note {
-
-  margin-top: 40px;
-
-  color: #8795a9;
-
-  font-size: 13px;
-
-  text-align: center;
-
-}
-
-</style>
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#081426">
+  <title>Video Grabber</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      color-scheme: dark;
+      --bg: #081426;
+      --panel: #14243b;
+      --panel2: #0b192c;
+      --muted: #aab8ca;
+      --line: #30445f;
+      --blue: #3478f6;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    .app-shell {
+      display: flex;
+      min-height: 100vh;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .sidebar {
+      width: 225px;
+      flex: 0 0 225px;
+      padding: 26px 16px;
+      border-right: 1px solid var(--line);
+      background: #0b192c;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 8px 30px;
+    }
+    .brand-star { font-size: 30px; }
+    .brand-name { font-size: 19px; font-weight: bold; }
+    .nav-button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      margin: 7px 0;
+      padding: 14px 13px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: transparent;
+      color: #c8d5e7;
+      text-align: left;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .nav-button.active {
+      background: #1b3557;
+      border-color: #345b8b;
+      color: white;
+    }
+    .nav-icon { width: 22px; text-align: center; font-size: 18px; }
+    .main-content {
+      width: 100%;
+      min-width: 0;
+      padding: 30px;
+    }
+    .page-header { margin-bottom: 24px; }
+    h1 { margin: 0; font-size: 27px; }
+    h2 { margin: 0 0 16px; font-size: 20px; }
+    h3 { margin: 0; font-size: 16px; }
+    .subtitle { color: var(--muted); margin-top: 7px; line-height: 1.45; }
+    .panel {
+      background: var(--panel);
+      padding: 22px;
+      border: 1px solid rgba(120,150,190,.12);
+      border-radius: 16px;
+      margin-bottom: 20px;
+    }
+    input, select {
+      width: 100%;
+      padding: 14px;
+      border-radius: 9px;
+      border: 1px solid #40516b;
+      background: var(--panel2);
+      color: white;
+      font-size: 15px;
+      margin: 10px 0;
+    }
+    button.action-button {
+      width: 100%;
+      padding: 14px;
+      margin-top: 10px;
+      border: 0;
+      border-radius: 9px;
+      background: var(--blue);
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button.secondary { background: #263b57; }
+    button:disabled { opacity: .5; cursor: wait; }
+    video {
+      width: 100%;
+      margin-top: 16px;
+      border-radius: 10px;
+      background: black;
+    }
+    .hidden { display: none !important; }
+    #status, #torrentStatus {
+      color: #b9d2ff;
+      margin-top: 14px;
+      overflow-wrap: anywhere;
+      line-height: 1.45;
+    }
+    #downloads { color: #d5dfed; }
+    .note {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .section-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .text-button {
+      width: auto;
+      padding: 8px 11px;
+      border: 1px solid #456080;
+      border-radius: 8px;
+      color: #dce9fb;
+      background: #203752;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .torrent-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin: 18px 0;
+    }
+    .stat {
+      padding: 13px;
+      border-radius: 10px;
+      background: #0e1d32;
+      min-width: 0;
+    }
+    .stat strong { display: block; font-size: 19px; overflow-wrap: anywhere; }
+    .stat span { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }
+    .file-list { display: grid; gap: 9px; margin-top: 16px; }
+    .file-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px;
+      background: #0e1d32;
+      border: 1px solid #263d59;
+      border-radius: 10px;
+    }
+    .file-row input[type="checkbox"] {
+      width: 19px;
+      height: 19px;
+      flex: 0 0 19px;
+      margin: 0;
+      accent-color: var(--blue);
+    }
+    .file-details { min-width: 0; flex: 1; }
+    .file-name { font-size: 14px; overflow-wrap: anywhere; }
+    .file-size { color: var(--muted); font-size: 12px; margin-top: 5px; }
+    .selection-total {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 15px;
+      margin-top: 16px;
+      background: #102b4c;
+      border: 1px solid #2d5b91;
+      border-radius: 10px;
+    }
+    .selection-total strong { color: white; }
+    .restriction {
+      padding: 13px;
+      border: 1px solid #80622d;
+      border-radius: 10px;
+      background: #302719;
+      color: #f5d99e;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-top: 15px;
+    }
+    .page { display: none; }
+    .page.active { display: block; }
+    @media (max-width: 700px) {
+      .app-shell { display: block; padding-bottom: 72px; }
+      .sidebar {
+        position: fixed;
+        z-index: 20;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        height: 65px;
+        padding: 6px 10px;
+        border-right: 0;
+        border-top: 1px solid var(--line);
+        display: flex;
+        justify-content: space-around;
+        background: #0b192c;
+      }
+      .brand { display: none; }
+      .nav-button {
+        width: 50%;
+        max-width: 220px;
+        justify-content: center;
+        flex-direction: column;
+        gap: 2px;
+        margin: 0 4px;
+        padding: 5px 3px;
+        font-size: 11px;
+      }
+      .nav-icon { font-size: 17px; }
+      .main-content { padding: 22px 15px; }
+      .panel { padding: 17px; }
+      .torrent-summary { grid-template-columns: repeat(3, minmax(0,1fr)); }
+      .stat { padding: 10px; }
+      .stat strong { font-size: 16px; }
+    }
+  </style>
 </head>
-
 <body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <div class="brand">
+        <div class="brand-star">★</div>
+        <div class="brand-name">Video Grabber</div>
+      </div>
+      <button class="nav-button active" type="button" data-page="videoPage">
+        <span class="nav-icon">⬇</span><span>Video Downloader</span>
+      </button>
+      <button class="nav-button" type="button" data-page="torrentPage">
+        <span class="nav-icon">🧲</span><span>Torrent Center</span>
+      </button>
+    </aside>
 
-<main>
+    <main class="main-content">
+      <section id="videoPage" class="page active">
+        <div class="page-header">
+          <h1>Video Downloader</h1>
+          <div class="subtitle">Detect, preview and save videos.</div>
+        </div>
 
-  <div class="logo">⬇</div>
+        <section class="panel">
+          <h2>Find a video</h2>
+          <input id="videoUrl" type="url" placeholder="Paste a website or direct video URL here">
+          <button id="detectButton" class="action-button" type="button">Detect Video</button>
+          <div id="status" role="status">Ready.</div>
+        </section>
 
-  <h1>Video Grabber</h1>
+        <section id="playerArea" class="panel hidden">
+          <h2>Video Preview</h2>
+          <video id="videoPlayer" controls playsinline></video>
+          <div id="videoChoices" style="display:none; margin-top:15px;">
+            <label for="videoSelect">Choose a video:</label>
+            <select id="videoSelect" style="width:100%; padding:12px; margin-top:8px;"></select>
+          </div>
+          <label for="quality">Video quality</label>
+          <select id="quality">
+            <option value="original">Original quality</option>
+          </select>
+          <button id="downloadButton" class="action-button" type="button">Download Video</button>
+          <button id="exportButton" class="action-button secondary" type="button">Export / Save Video</button>
+        </section>
 
-  <p class="subtitle">Paste a video link to get started</p>
+        <section class="panel">
+          <h2>My Downloads</h2>
+          <div id="downloads">No downloads yet.</div>
+        </section>
 
-  <input id="videoUrl" type="url"
+        <p class="note">
+          Only use video links that are publicly accessible or that you are authorized to access
+          and download. This app does not bypass subscriptions, login requirements, DRM, or other
+          access restrictions.
+        </p>
+      </section>
 
-    placeholder="Paste video URL here">
+      <section id="torrentPage" class="page">
+        <div class="page-header">
+          <h1>Torrent Center</h1>
+          <div class="subtitle">A separate space for reviewing torrent contents. It does not change your Video Downloader.</div>
+        </div>
+        <section class="panel">
+  <h2>Add an authorized torrent</h2>
+  <label for="torrentMagnet">Magnet link</label>
+  <input
+    id="torrentMagnet"
+    type="text"
+    placeholder="Paste a magnet link here"
+    style="width:100%; padding:12px; margin-top:8px;"
+  >
 
-  <button onclick="detectVideo()">Detect Video</button>
-
-  <div id="status">
-
-    Ready when you are.
-
-  </div>
+  <label for="torrentFile" style="display:block; margin-top:15px;">
+    Or choose a .torrent file
+  </label>
+  <input
+    id="torrentFile"
+    type="file"
+    accept=".torrent,application/x-bittorrent"
+    style="margin-top:8px;"
+  >
 
   <p class="note">
-
-    Downloads are supported only where the website
-
-    permits access. Protected streams aren't bypassed.
-
+    This is an input area only. It does not bypass tracker restrictions
+    or start a torrent download.
   </p>
+</section>
+        <section class="panel">
+          <h2>Torrent details</h2>
+          <h3>sirlovescody Sport Episodes 1–7</h3>
+          <div class="torrent-summary">
+            <div class="stat"><strong>2.14 GB</strong><span>Total torrent size</span></div>
+            <div class="stat"><strong>7</strong><span>Video files</span></div>
+            <div class="stat"><strong>1080p</strong><span>Advertised resolution</span></div>
+          </div>
+          <p class="note">The following file list is based on the details you supplied from the tracker page.</p>
+          <div class="section-top">
+            <h3>Choose episodes</h3>
+            <div>
+              <button id="selectAllFiles" class="text-button" type="button">Select all</button>
+              <button id="clearFiles" class="text-button" type="button">Clear</button>
+            </div>
+          </div>
+          <div id="torrentFiles" class="file-list">
+            <label class="file-row">
+              <input class="torrent-file" type="checkbox" data-bytes="165944657" checked>
+              <span class="file-details"><span class="file-name">Episode 1 1920x1080.mp4</span><span class="file-size">158.26 MB</span></span>
+            </label>
+            <label class="file-row">
+              <input class="torrent-file" type="checkbox" data-bytes="329035410" checked>
+              <span class="file-details"><span class="file-name">Episode 2 1920x1080.mp4</span><span class="file-size">313.79 MB</span></span>
+            </label>
+            <label class="file-row">
+              <input class="torrent-file" type="checkbox" data-bytes="317835028" checked>
+              <span class="file-details"><span class="file-name">Episode 3 1920x1080.mp4</span><span class="file-size">303.11 MB</span></span>
+            </label>
+            <label class="file-row">
+              <input class="torrent-file" type="checkbox" data-bytes="308273579" checked>
+              <span class="file-details"><span class="file-name">Episode 4 1920x1080.mp4</span><span class="file-size">293.99 MB</span></span>
+            </label>
+            <label class="file-row">
+              <input class="torrent-file" type="checkbox" data-bytes="401800389" checked>
+              <span class="file-details"><span class="file-name">Episode 5 1920x1080.mp4</span><span class="file-size">383.19 MB</span></span>
+            </label>
+            <label class="file-row">
+              <input class="torrent-file" type="checkbox" data-bytes="405431989" checked>
+              <span class="file-details"><span class="file-name">Episode 6 1920x1080.mp4</span><span class="file-size">386.65 MB</span></span>
+            </label>
+            <label class="file-row">
+              <input class="torrent-file" type="checkbox" data-bytes="374810245" checked>
+              <span class="file-details"><span class="file-name">Episode 7 1920x1080.mp4</span><span class="file-size">357.45 MB</span></span>
+            </label>
+          </div>
+          <div class="selection-total" aria-live="polite">
+            <span><strong id="selectedCount">7</strong> of 7 episodes selected</span>
+            <strong id="selectedSize">2.14 GB</strong>
+          </div>
+          <div id="torrentStatus" role="status">File selection is ready. No torrent has been downloaded.</div>
+          <div class="restriction">
+            Tracker restriction noted: the page says your account is currently limited to one FREELEECH download at a time until your ratio is fixed. This screen only displays the file metadata and selection; it does not bypass tracker rules or start a torrent download.
+          </div>
+        </section>
+        <p class="note">
+          Torrent downloading is not connected yet. A future integration would need the tracker's
+          permitted .torrent or magnet download and must respect its account permissions and limits.
+        </p>
+      </section>
+    </main>
+  </div>
 
-</main>
+  <script>
+    let currentUrl = "";
 
-<script>
+    const statusBox = document.getElementById("status");
+    const playerArea = document.getElementById("playerArea");
+    const videoPlayer = document.getElementById("videoPlayer");
+    const videoUrl = document.getElementById("videoUrl");
+    const downloadButton = document.getElementById("downloadButton");
+    const exportButton = document.getElementById("exportButton");
 
-function detectVideo() {
+    function setStatus(message) {
+      statusBox.textContent = message;
+    }
 
-  const url = document.getElementById("videoUrl").value.trim();
+    function getDownloadUrl() {
+      return location.origin + "/download?url=" + encodeURIComponent(currentUrl);
+    }
 
-  const status = document.getElementById("status");
+    function getXDetectionBase() {
+      const host = location.hostname.replace(/-\d+\.app\.github\.dev$/, "-8001.app.github.dev");
+      return "https://" + host;
+    }
 
-  if (!url) {
+    async function detectVideo() {
+      const enteredUrl = videoUrl.value.trim();
 
-    status.textContent = "Please paste a video link first.";
+      if (!enteredUrl) {
+        setStatus("Please paste a website or video URL.");
+        return;
+      }
 
-    return;
+      let parsed;
+      try {
+        parsed = new URL(enteredUrl);
+      } catch {
+        setStatus("Please enter a valid website URL.");
+        return;
+      }
 
-  }
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        setStatus("Please use an HTTP or HTTPS URL.");
+        return;
+      }
 
-  try {
+      const isX = ["x.com", "www.x.com", "twitter.com", "www.twitter.com"].includes(parsed.hostname);
 
-    new URL(url);
+      if (isX) {
+        setStatus("Checking public X video sources...");
+        try {
+          const response = await fetch(
+            getXDetectionBase() + "/detect?url=" + encodeURIComponent(enteredUrl)
+          );
+          const result = await response.json();
 
-    status.textContent =
+          if (!response.ok || result.error) {
+            throw new Error(result.error || "X detection failed.");
+          }
 
-      "Link received! Video detection will be added next.";
+          if (result.platform === "X") {
+            setStatus(result.thumbnail
+              ? "X post recognized! Video thumbnail found."
+              : (result.message || "X post recognized."));
+          }
 
-  } catch {
+          if (result.videos && result.videos.length > 0) {
+            const urls = result.videos.filter(video => video.url).map(video => video.url);
+            if (urls.length > 0) {
+              showVideoChoices(urls);
+              setStatus("Found " + urls.length + " X video quality option(s).");
+            }
+          } else {
+            setStatus(result.message || "No publicly accessible X video formats were found.");
+          }
+        } catch (error) {
+          setStatus("X detection error: " + error.message);
+        }
+        return;
+      }
 
-    status.textContent = "Please enter a valid web address.";
+      if (/\.(mp4|webm|ogg|mov)$/i.test(parsed.pathname)) {
+        showDetectedVideo(enteredUrl);
+        return;
+      }
 
-  }
+      setStatus("Checking website for accessible video sources...");
+      try {
+        const response = await fetch(
+          location.origin + "/detect?url=" + encodeURIComponent(enteredUrl)
+        );
+        const result = await response.json();
 
-}
+        if (!response.ok || result.error) {
+          throw new Error(result.error || "Website detection failed.");
+        }
 
-</script>
+        if (result.type === "direct-file") {
+          showDetectedVideo(enteredUrl);
+          return;
+        }
 
+        if (result.videos && result.videos.length > 0) {
+          const urls = result.videos.filter(video => video.url).map(video => video.url);
+          if (urls.length > 0) {
+            showVideoChoices(urls);
+            setStatus("Found " + urls.length + " accessible video source(s). Showing the first one.");
+            return;
+          }
+        }
+
+        setStatus(result.message || "No directly accessible video sources were found.");
+      } catch (error) {
+        setStatus("Detection error: " + error.message);
+      }
+    }
+
+    function showDetectedVideo(url) {
+      currentUrl = url;
+      videoPlayer.src = url;
+      playerArea.classList.remove("hidden");
+      document.getElementById("videoChoices").style.display = "none";
+      setStatus("Video found! You can preview or download it.");
+    }
+
+    function showVideoChoices(urls) {
+      const container = document.getElementById("videoChoices");
+      const select = document.getElementById("videoSelect");
+      select.innerHTML = "";
+
+      urls.forEach((url, index) => {
+        const option = document.createElement("option");
+        option.value = url;
+        option.textContent = "Video " + (index + 1);
+        select.appendChild(option);
+      });
+
+      container.style.display = urls.length > 1 ? "block" : "none";
+      showDetectedVideo(urls[0]);
+      if (urls.length > 1) container.style.display = "block";
+    }
+
+    document.getElementById("videoSelect").addEventListener("change", function () {
+      showDetectedVideo(this.value);
+      document.getElementById("videoChoices").style.display = "block";
+    });
+
+    function downloadVideo() {
+      if (!currentUrl) {
+        setStatus("Detect a video first.");
+        return;
+      }
+
+      const link = document.createElement("a");
+      link.href = getDownloadUrl();
+      link.download = "Video-Grabber.mp4";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      setStatus("Download requested. Check your browser Downloads.");
+      addDownload("Video-Grabber.mp4");
+    }
+
+    async function exportVideo() {
+      if (!currentUrl) {
+        setStatus("Detect a video first.");
+        return;
+      }
+
+      exportButton.disabled = true;
+      setStatus("Preparing your video...");
+
+      try {
+        const response = await fetch(getDownloadUrl());
+        if (!response.ok) {
+          throw new Error("The server could not retrieve the video. HTTP " + response.status);
+        }
+
+        const blob = await response.blob();
+        if (!blob.size) throw new Error("The downloaded video was empty.");
+
+        const file = new File(
+          [blob],
+          "Video-Grabber.mp4",
+          { type: blob.type || "video/mp4" }
+        );
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: "Save Video" });
+          setStatus("Share menu opened. Choose Save Video if available.");
+        } else {
+          const objectUrl = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = objectUrl;
+          link.download = "Video-Grabber.mp4";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+          setStatus("Video downloaded. Open it to share or save it.");
+        }
+
+        addDownload("Video-Grabber.mp4");
+      } catch (error) {
+        if (error.name === "AbortError") {
+          setStatus("Export cancelled.");
+        } else {
+          setStatus("Export failed: " + error.message);
+        }
+      } finally {
+        exportButton.disabled = false;
+      }
+    }
+
+    function addDownload(name) {
+      const downloads = document.getElementById("downloads");
+      if (downloads.textContent === "No downloads yet.") downloads.textContent = "";
+      const item = document.createElement("div");
+      item.textContent = "✓ " + name;
+      item.style.padding = "8px 0";
+      downloads.prepend(item);
+    }
+
+    document.getElementById("detectButton").addEventListener("click", detectVideo);
+    downloadButton.addEventListener("click", downloadVideo);
+    exportButton.addEventListener("click", exportVideo);
+
+    // Side-tab navigation
+    document.querySelectorAll(".nav-button").forEach(button => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".nav-button").forEach(item => item.classList.remove("active"));
+        document.querySelectorAll(".page").forEach(page => page.classList.remove("active"));
+        button.classList.add("active");
+        document.getElementById(button.dataset.page).classList.add("active");
+      });
+    });
+
+    // Torrent metadata selection only; this does not initiate a torrent transfer.
+    const torrentChecks = Array.from(document.querySelectorAll(".torrent-file"));
+    const selectedCount = document.getElementById("selectedCount");
+    const selectedSize = document.getElementById("selectedSize");
+
+    function formatBytes(bytes) {
+      if (bytes >= 1024 ** 3) return (bytes / (1024 ** 3)).toFixed(2) + " GB";
+      return (bytes / (1024 ** 2)).toFixed(2) + " MB";
+    }
+
+    function updateTorrentSelection() {
+      const selected = torrentChecks.filter(box => box.checked);
+      const totalBytes = selected.reduce((sum, box) => sum + Number(box.dataset.bytes), 0);
+      selectedCount.textContent = selected.length;
+      selectedSize.textContent = formatBytes(totalBytes);
+    }
+
+    torrentChecks.forEach(box => box.addEventListener("change", updateTorrentSelection));
+
+    document.getElementById("selectAllFiles").addEventListener("click", () => {
+      torrentChecks.forEach(box => box.checked = true);
+      updateTorrentSelection();
+    });
+
+    document.getElementById("clearFiles").addEventListener("click", () => {
+      torrentChecks.forEach(box => box.checked = false);
+      updateTorrentSelection();
+    });
+
+    updateTorrentSelection();
+  </script>
 </body>
-
 </html>

@@ -516,8 +516,8 @@
         );
         const result = await response.json();
 
-        if (!response.ok || result.error) {
-          throw new Error(result.error || "Website detection failed.");
+        if (!response.ok || result.success === false || result.error) {
+          throw new Error(result.message || result.error || "Website detection failed.");
         }
 
         if (result.type === "direct-file") {

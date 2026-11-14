@@ -221,7 +221,7 @@
       }
       .brand { display: none; }
       .nav-button {
-        width: 50%;
+        width: 33.333%;
         max-width: 220px;
         justify-content: center;
         flex-direction: column;
@@ -251,6 +251,9 @@
       </button>
       <button class="nav-button" type="button" data-page="torrentPage">
         <span class="nav-icon">🧲</span><span>Torrent Center</span>
+      </button>
+      <button class="nav-button" type="button" data-page="analyzerPage">
+        <span class="nav-icon">🔎</span><span>Stream Analyzer</span>
       </button>
     </aside>
 
@@ -293,6 +296,22 @@
           and download. This app does not bypass subscriptions, login requirements, DRM, or other
           access restrictions.
         </p>
+      </section>
+
+      <section id="analyzerPage" class="page">
+        <div class="page-header">
+          <h1>Protected Stream Analyzer</h1>
+          <div class="subtitle">Inspect accessible HLS and MPEG-DASH streams and identify reported DRM protection.</div>
+        </div>
+        <section class="panel">
+          <h2>Analyze a stream or webpage</h2>
+          <label for="streamAnalyzeUrl">Stream or webpage URL</label>
+          <input id="streamAnalyzeUrl" type="url" placeholder="Paste an authorized HLS, DASH, or video page URL">
+          <button id="analyzeStreamButton" class="action-button" type="button">Analyze Stream</button>
+          <div id="streamAnalyzeStatus" role="status" class="note" style="margin-top:14px;">Ready. Analysis checks accessible metadata only.</div>
+          <div id="streamAnalyzeResults" style="margin-top:14px;"></div>
+        </section>
+        <p class="note">The analyzer does not request DRM licenses, extract content keys, decrypt protected media, or bypass subscriptions. A service may also require an active account session. “No DRM flag” is not a guarantee that a stream is downloadable.</p>
       </section>
 
       <section id="torrentPage" class="page">
@@ -338,6 +357,11 @@
     or start a torrent download.
   </p>
 </section>
+        <section class="panel">
+          <h2>Tracker / ratio diagnostics</h2>
+          <div id="torrentDiagnostic" class="note" role="status">If a tracker rejects a download, this panel will explain the reported error and suggest permitted next steps.</div>
+          <p class="note">Ratio limits are account-side tracker rules. This app can diagnose errors and inspect a torrent file you are allowed to download, but cannot change ratio credit or evade freeleech/account restrictions.</p>
+        </section>
         <section class="panel">
           <h2>Torrent details</h2>
           <h3>sirlovescody Sport Episodes 1–7</h3>
@@ -639,6 +663,75 @@
 
 
 
+    // Analyze accessible HLS/DASH metadata; never request DRM licenses or keys.
+    document.getElementById("analyzeStreamButton").addEventListener("click", async () => {
+      const source = document.getElementById("streamAnalyzeUrl").value.trim();
+      const status = document.getElementById("streamAnalyzeStatus");
+      const output = document.getElementById("streamAnalyzeResults");
+      if (!source) { status.textContent = "Paste a stream or webpage URL first."; return; }
+      let parsed;
+      try { parsed = new URL(source); } catch { status.textContent = "Enter a valid HTTP or HTTPS URL."; return; }
+      if (!["http:", "https:"].includes(parsed.protocol)) { status.textContent = "Only HTTP and HTTPS URLs are supported."; return; }
+      const button = document.getElementById("analyzeStreamButton");
+      button.disabled = true;
+      status.textContent = "Inspecting accessible stream metadata...";
+      output.replaceChildren();
+      try {
+        const response = await fetch(location.origin + "/analyze-stream?url=" + encodeURIComponent(source));
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || "Analysis failed.");
+        const summary = document.createElement("div");
+        summary.className = "restriction";
+        summary.textContent = result.title + " · " + result.stream_type + " · " + result.protection + ". " + result.message;
+        output.appendChild(summary);
+        const details = document.createElement("p");
+        details.className = "note";
+        details.textContent = "Source: " + result.extractor + " · Formats checked: " + result.formats_checked + " · DRM-marked formats: " + result.drm_format_count + " · Protocols: " + (result.protocols.join(", ") || "not reported");
+        output.appendChild(details);
+        const addTable = (heading, items) => {
+          const title = document.createElement("h3");
+          title.textContent = heading + " (" + items.length + ")";
+          output.appendChild(title);
+          if (!items.length) return;
+          const list = document.createElement("ul");
+          items.forEach(item => {
+            const li = document.createElement("li");
+            li.textContent = (item.format_id || "format") + " · " + (item.height ? item.height + "p" : item.ext || "media") + " · " + (item.protocol || "unknown protocol") + (item.language ? " · " + item.language : "") + (item.has_drm ? " · DRM flagged" : "");
+            list.appendChild(li);
+          });
+          output.appendChild(list);
+        };
+        addTable("Video formats", result.video_formats || []);
+        addTable("Audio formats", result.audio_formats || []);
+        const captions = document.createElement("p");
+        captions.className = "note";
+        captions.textContent = "Subtitle languages: " + ((result.subtitle_languages || []).join(", ") || "none reported") + ". Automatic captions: " + ((result.automatic_caption_languages || []).join(", ") || "none reported");
+        output.appendChild(captions);
+        status.textContent = "Analysis complete.";
+      } catch (error) {
+        status.textContent = "Analysis unavailable: " + error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    function showTorrentDiagnostic(message) {
+      const panel = document.getElementById("torrentDiagnostic");
+      const text = String(message || "");
+      const lower = text.toLowerCase();
+      let advice = "The tracker did not provide enough detail to identify the cause. Check the link while signed in and consult the tracker's account page.";
+      if (/ratio|hit.?and.?run|h.?&.?r|freeleech|download.?limit/.test(lower)) {
+        advice = "This appears to be a ratio or download-permission restriction. Use a qualifying Freeleech torrent, seed existing downloads, check bonus-point options, or contact tracker staff.";
+      } else if (/403|forbidden|unauthori[sz]ed/.test(lower)) {
+        advice = "The tracker denied this request. Confirm you are signed in and that your account is allowed to download this torrent.";
+      } else if (/404|not found/.test(lower)) {
+        advice = "The tracker returned 404. The download endpoint may be expired, account-gated, or intentionally masked when your account lacks permission. Open the torrent page while signed in and use its permitted download action.";
+      } else if (/429|too many/.test(lower)) {
+        advice = "The tracker may be rate-limiting requests. Wait and follow its stated download limits.";
+      }
+      panel.textContent = "Reported error: " + text + " " + advice;
+    }
+
     // Read the torrent metadata and show its actual contents without starting a transfer.
     document.getElementById("identifyTorrentButton").addEventListener("click", async () => {
       const source = document.getElementById("torrentLinkUrl").value.trim();
@@ -733,6 +826,7 @@
         status.textContent = "Torrent file saved. Open it from your browser's Downloads and choose µTorrent.";
       } catch (error) {
         status.textContent = "Torrent retrieval failed: " + error.message;
+        showTorrentDiagnostic(error.message);
       } finally {
         button.disabled = false;
       }

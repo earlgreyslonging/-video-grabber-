@@ -196,6 +196,31 @@ def detect_video(url):
     }
 
 
+def analyze_stream(url):
+    """Inspect accessible stream metadata without retrieving DRM licenses or keys."""
+    validate_url(url)
+    with yt_dlp.YoutubeDL(get_ytdlp_options()) as ydl:
+        info = ydl.extract_info(url, download=False)
+    if not info:
+        raise ValueError("No stream metadata was returned. The page may require sign-in or may not expose a supported manifest.")
+    formats = info.get("formats") or []
+    protocols = sorted({str(item.get("protocol") or "").lower() for item in formats if item.get("protocol")})
+    extensions = {str(item.get("ext") or "").lower() for item in formats}
+    manifest = str(info.get("manifest_url") or "").lower()
+    stream_type = "HLS" if any("m3u8" in p for p in protocols) or "m3u8" in extensions or ".m3u8" in manifest else ("MPEG-DASH" if any("dash" in p for p in protocols) or "mpd" in extensions or ".mpd" in manifest else "Direct/other")
+    drm_formats = [item for item in formats if item.get("has_drm")]
+    protected = bool(info.get("has_drm") or drm_formats)
+    video_formats, audio_formats = [], []
+    for item in formats:
+        row = {"format_id": str(item.get("format_id") or ""), "ext": str(item.get("ext") or ""), "protocol": str(item.get("protocol") or ""), "height": int(item.get("height") or 0), "width": int(item.get("width") or 0), "language": str(item.get("language") or ""), "has_drm": bool(item.get("has_drm"))}
+        if item.get("vcodec") != "none" and item.get("vcodec"):
+            video_formats.append(row)
+        elif item.get("acodec") != "none" and item.get("acodec"):
+            audio_formats.append(row)
+    return {"success": True, "title": str(info.get("title") or "Unknown stream"), "extractor": str(info.get("extractor_key") or "Website"), "stream_type": stream_type, "protection": "DRM detected" if protected else "No DRM flag reported by extractor", "drm_detected": protected, "formats_checked": len(formats), "drm_format_count": len(drm_formats), "protocols": protocols, "video_formats": video_formats[:40], "audio_formats": audio_formats[:40], "subtitle_languages": sorted((info.get("subtitles") or {}).keys()), "automatic_caption_languages": sorted((info.get("automatic_captions") or {}).keys()), "message": "This stream is marked as DRM-protected. The analyzer will not request license keys or attempt decryption." if protected else "No DRM flag was reported. This is not proof that the stream is unprotected; the service may restrict access separately."}
+
+
+
 class VideoGrabberHandler(SimpleHTTPRequestHandler):
 
     def send_json(self, data, status=200):
@@ -363,6 +388,16 @@ class VideoGrabberHandler(SimpleHTTPRequestHandler):
                     "videos": [],
                 }, 400)
 
+            return
+
+        if parsed.path == "/analyze-stream":
+            stream_url = params.get("url", [""])[0].strip()
+            try:
+                if not stream_url:
+                    raise ValueError("Please provide a stream or webpage URL.")
+                self.send_json(analyze_stream(stream_url))
+            except Exception as error:
+                self.send_json({"success": False, "message": str(error), "drm_detected": None}, 400)
             return
 
         if parsed.path == "/download":

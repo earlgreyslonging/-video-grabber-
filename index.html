@@ -302,6 +302,17 @@
         </div>
         <section class="panel">
   <h2>Add an authorized torrent</h2>
+
+          <label for="torrentLinkUrl">Torrent download URL</label>
+          <input
+            id="torrentLinkUrl"
+            type="url"
+            placeholder="Paste an authorized .torrent download link"
+            style="width:100%; padding:12px; margin-top:8px;"
+          >
+          <button id="getTorrentButton" class="action-button" type="button">Get .torrent File</button>
+          <button id="openMagnetButton" class="action-button secondary" type="button">Open Magnet in Torrent Client</button>
+          <div id="torrentLinkStatus" role="status" class="note" style="margin-top:12px;">Ready for an authorized .torrent URL or magnet link.</div>
   <label for="torrentMagnet">Magnet link</label>
   <input
     id="torrentMagnet"
@@ -622,6 +633,72 @@
         button.classList.add("active");
         document.getElementById(button.dataset.page).classList.add("active");
       });
+    });
+
+
+    // Download a .torrent file from a permitted HTTP(S) endpoint.
+    document.getElementById("getTorrentButton").addEventListener("click", async () => {
+      const input = document.getElementById("torrentLinkUrl");
+      const status = document.getElementById("torrentLinkStatus");
+      const source = input.value.trim();
+      if (!source) {
+        status.textContent = "Paste a .torrent download URL first.";
+        return;
+      }
+      let parsed;
+      try { parsed = new URL(source); } catch {
+        status.textContent = "Please enter a valid HTTP or HTTPS URL.";
+        return;
+      }
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        status.textContent = "Only HTTP or HTTPS .torrent links are supported here.";
+        return;
+      }
+      const button = document.getElementById("getTorrentButton");
+      button.disabled = true;
+      status.textContent = "Checking the link and retrieving the .torrent file...";
+      try {
+        const response = await fetch(location.origin + "/torrent?url=" + encodeURIComponent(source));
+        const type = response.headers.get("Content-Type") || "";
+        if (!response.ok) {
+          let message = "The server could not retrieve the torrent file (HTTP " + response.status + ").";
+          try { const error = await response.json(); if (error.message) message = error.message; } catch {}
+          throw new Error(message);
+        }
+        if (!type.toLowerCase().includes("bittorrent")) {
+          throw new Error("The server did not identify the response as a torrent file.");
+        }
+        const blob = await response.blob();
+        if (!blob.size) throw new Error("The torrent file was empty.");
+        const disposition = response.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename="?([^";]+)"?/i);
+        const filename = match ? match[1] : "download.torrent";
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = objectUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+        status.textContent = "Torrent file saved. Open it from your browser's Downloads and choose µTorrent.";
+      } catch (error) {
+        status.textContent = "Torrent retrieval failed: " + error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById("openMagnetButton").addEventListener("click", () => {
+      const input = document.getElementById("torrentMagnet");
+      const status = document.getElementById("torrentLinkStatus");
+      const magnet = input.value.trim();
+      if (!/^magnet:\?xt=urn:btih:[a-z0-9]{32,40}/i.test(magnet)) {
+        status.textContent = "Enter a valid magnet link beginning with magnet:?xt=urn:btih:";
+        return;
+      }
+      status.textContent = "Handing the magnet link to your browser. Approve opening µTorrent if prompted.";
+      window.location.href = magnet;
     });
 
     // Torrent metadata selection only; this does not initiate a torrent transfer.

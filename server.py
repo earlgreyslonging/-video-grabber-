@@ -6,7 +6,10 @@ import ipaddress
 import yt_dlp
 
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
+from email.message import Message
+import mimetypes
+import re
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
@@ -153,30 +156,61 @@ class VideoGrabberHandler(SimpleHTTPRequestHandler):
     def handle_download(self, video_url):
         validate_url(video_url)
 
-        # Only allow direct public HTTP(S) MP4 URLs.
-        if not video_url.lower().split("?")[0].endswith(".mp4"):
-            raise ValueError("Only direct public MP4 links can be downloaded.")
-
+        # Accept download endpoints such as /download.php as well as .mp4 URLs.
+        # The response must identify itself as a video or as a downloadable file.
         request = Request(
             video_url,
             headers={"User-Agent": "Mozilla/5.0"}
         )
 
         with urlopen(request, timeout=45) as response:
-            content_type = response.headers.get("Content-Type", "").lower()
+            headers = response.headers
+            content_type = headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+            disposition = headers.get("Content-Disposition", "")
+            disposition_message = Message()
+            disposition_message["content-disposition"] = disposition
+            filename = disposition_message.get_filename()
 
-            if "video/" not in content_type and "octet-stream" not in content_type:
-                raise ValueError("The source did not return a video file.")
+            if not filename:
+                filename = unquote(os.path.basename(urlparse(response.geturl()).path))
+
+            filename = os.path.basename((filename or "").replace("\\", "/"))
+            filename = re.sub(r'[^A-Za-z0-9._ -]', "_", filename).strip(" .")
+            if not filename:
+                filename = "Video-Grabber"
+
+            guessed_type, _ = mimetypes.guess_type(filename)
+            is_video = content_type.startswith("video/")
+            is_binary_download = (
+                content_type == "application/octet-stream"
+                or disposition.lower().startswith("attachment")
+            )
+
+            # Avoid saving an HTML login/error page as if it were a video.
+            video_extensions = (
+                ".mp4", ".m4v", ".mov", ".webm", ".mkv",
+                ".avi", ".mpeg", ".mpg", ".wmv", ".flv"
+            )
+            filename_looks_like_video = filename.lower().endswith(video_extensions)
+            if not is_video and not (
+                is_binary_download and (filename_looks_like_video or guessed_type and guessed_type.startswith("video/"))
+            ):
+                raise ValueError(
+                    "The link did not return a recognizable video download. "
+                    "It may require sign-in, or the server may have returned a webpage."
+                )
+
+            output_type = content_type if is_video else (guessed_type or "application/octet-stream")
 
             self.send_response(200)
-            self.send_header("Content-Type", "video/mp4")
+            self.send_header("Content-Type", output_type)
             self.send_header(
                 "Content-Disposition",
-                'attachment; filename="Video-Grabber.mp4"'
+                f'attachment; filename="{filename}"'
             )
             self.send_header("Cache-Control", "no-store")
 
-            content_length = response.headers.get("Content-Length")
+            content_length = headers.get("Content-Length")
             if content_length:
                 self.send_header("Content-Length", content_length)
 

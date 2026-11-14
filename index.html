@@ -535,6 +535,12 @@
         }
 
         setStatus(result.message || "No directly accessible video sources were found.");
+        if (result.title) {
+          const detail = document.createElement("p");
+          detail.className = "note";
+          detail.textContent = "Recognized: " + result.title + " · Stream: " + (result.stream_type || "unknown") + " · DRM: " + (result.drm_detected === true ? "reported" : result.drm_detected === false ? "not reported" : "unknown") + " · Formats checked: " + (result.formats_checked ?? 0);
+          statusBox.appendChild(detail);
+        }
       } catch (error) {
         setStatus("Detection error: " + error.message);
       }

@@ -41,6 +41,71 @@ def validate_url(url):
     return parsed
 
 
+
+def bdecode(data):
+    """Decode the small subset of BitTorrent bencoding needed for metadata."""
+    def parse(pos):
+        if pos >= len(data):
+            raise ValueError("Torrent metadata is truncated.")
+        token = data[pos:pos + 1]
+        if token == b"i":
+            end = data.find(b"e", pos)
+            if end < 0:
+                raise ValueError("Invalid integer in torrent metadata.")
+            return int(data[pos + 1:end]), end + 1
+        if token == b"l":
+            values, pos = [], pos + 1
+            while pos < len(data) and data[pos:pos + 1] != b"e":
+                value, pos = parse(pos)
+                values.append(value)
+            if pos >= len(data):
+                raise ValueError("Invalid list in torrent metadata.")
+            return values, pos + 1
+        if token == b"d":
+            values, pos = {}, pos + 1
+            while pos < len(data) and data[pos:pos + 1] != b"e":
+                key, pos = parse(pos)
+                value, pos = parse(pos)
+                values[key] = value
+            if pos >= len(data):
+                raise ValueError("Invalid dictionary in torrent metadata.")
+            return values, pos + 1
+        if token.isdigit():
+            colon = data.find(b":", pos)
+            if colon < 0:
+                raise ValueError("Invalid byte string in torrent metadata.")
+            length = int(data[pos:colon])
+            start, end = colon + 1, colon + 1 + length
+            if end > len(data):
+                raise ValueError("Torrent metadata is truncated.")
+            return data[start:end], end
+        raise ValueError("The URL did not return a valid .torrent file.")
+
+    result, end = parse(0)
+    if end != len(data) or not isinstance(result, dict) or not isinstance(result.get(b"info"), dict):
+        raise ValueError("The response is not a complete .torrent file.")
+    return result
+
+
+def torrent_metadata(data):
+    decoded = bdecode(data)
+    info = decoded[b"info"]
+    raw_name = info.get(b"name.utf-8") or info.get(b"name") or b"Unnamed torrent"
+    name = raw_name.decode("utf-8", "replace") if isinstance(raw_name, bytes) else "Unnamed torrent"
+    files = []
+    if isinstance(info.get(b"files"), list):
+        for item in info[b"files"]:
+            if not isinstance(item, dict):
+                continue
+            raw_path = item.get(b"path.utf-8") or item.get(b"path") or []
+            parts = [p.decode("utf-8", "replace") if isinstance(p, bytes) else str(p) for p in raw_path]
+            files.append({"path": "/".join(parts), "size": int(item.get(b"length", 0))})
+    else:
+        files.append({"path": name, "size": int(info.get(b"length", 0))})
+    total = sum(max(0, f["size"]) for f in files)
+    return {"name": name, "file_count": len(files), "total_bytes": total, "files": files}
+
+
 def is_x_url(url):
     host = (urlparse(url).hostname or "").lower()
     return host in ("x.com", "www.x.com", "twitter.com", "www.twitter.com")
@@ -223,6 +288,17 @@ class VideoGrabberHandler(SimpleHTTPRequestHandler):
                 self.wfile.write(chunk)
 
 
+
+    def handle_torrent_info(self, torrent_url):
+        validate_url(torrent_url)
+        request = Request(torrent_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(request, timeout=45) as response:
+            validate_url(response.geturl())
+            data = response.read(8 * 1024 * 1024 + 1)
+            if len(data) > 8 * 1024 * 1024:
+                raise ValueError("The .torrent file is larger than the 8 MB safety limit.")
+            return torrent_metadata(data)
+
     def handle_torrent_download(self, torrent_url):
         validate_url(torrent_url)
 
@@ -307,6 +383,17 @@ class VideoGrabberHandler(SimpleHTTPRequestHandler):
 
             return
 
+
+
+        if parsed.path == "/torrent-info":
+            torrent_url = params.get("url", [""])[0].strip()
+            try:
+                if not torrent_url:
+                    raise ValueError("Please provide a .torrent download URL.")
+                self.send_json({"success": True, **self.handle_torrent_info(torrent_url)})
+            except Exception as error:
+                self.send_json({"success": False, "message": str(error)}, 400)
+            return
 
         if parsed.path == "/torrent":
             torrent_url = params.get("url", [""])[0].strip()

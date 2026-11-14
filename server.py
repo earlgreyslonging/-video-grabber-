@@ -179,6 +179,25 @@ def detect_video(url):
         raise ValueError("No video information was returned.")
 
     videos = extract_video_formats(info)
+    all_formats = info.get("formats") or []
+    drm_detected = bool(info.get("has_drm") or any(item.get("has_drm") for item in all_formats))
+    protocols = sorted({str(item.get("protocol") or "").lower() for item in all_formats if item.get("protocol")})
+    extensions = {str(item.get("ext") or "").lower() for item in all_formats}
+    manifest = str(info.get("manifest_url") or "").lower()
+    stream_type = (
+        "HLS" if any("m3u8" in value for value in protocols) or "m3u8" in extensions or ".m3u8" in manifest
+        else "MPEG-DASH" if any("dash" in value for value in protocols) or "mpd" in extensions or ".mpd" in manifest
+        else "Direct/other"
+    )
+
+    if videos:
+        message = f"Found {len(videos)} accessible direct MP4 option(s)."
+    elif drm_detected:
+        message = "A video stream was found, but it is marked DRM-protected. Video Grabber can identify it but cannot download or decrypt the protected stream."
+    elif stream_type in ("HLS", "MPEG-DASH"):
+        message = f"A {stream_type} stream was found, but no downloadable, unprotected direct MP4 format was exposed."
+    else:
+        message = "The page was recognized, but no publicly accessible direct MP4 formats were found. It may require sign-in or use an unsupported player."
 
     return {
         "success": bool(videos),
@@ -188,11 +207,11 @@ def detect_video(url):
         "thumbnail": info.get("thumbnail") or "",
         "duration": info.get("duration"),
         "videos": videos,
-        "message": (
-            f"Found {len(videos)} public MP4 option(s)."
-            if videos else
-            "No publicly accessible direct MP4 formats were found."
-        ),
+        "stream_type": stream_type,
+        "drm_detected": drm_detected,
+        "formats_checked": len(all_formats),
+        "protocols": protocols,
+        "message": message,
     }
 
 

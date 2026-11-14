@@ -311,6 +311,8 @@
             style="width:100%; padding:12px; margin-top:8px;"
           >
           <button id="getTorrentButton" class="action-button" type="button">Get .torrent File</button>
+          <button id="identifyTorrentButton" class="action-button secondary" type="button">Identify Torrent &amp; List Files</button>
+          <div id="torrentInfoResult" class="note" style="margin-top:14px;"></div>
           <button id="openMagnetButton" class="action-button secondary" type="button">Open Magnet in Torrent Client</button>
           <div id="torrentLinkStatus" role="status" class="note" style="margin-top:12px;">Ready for an authorized .torrent URL or magnet link.</div>
   <label for="torrentMagnet">Magnet link</label>
@@ -635,6 +637,53 @@
       });
     });
 
+
+
+    // Read the torrent metadata and show its actual contents without starting a transfer.
+    document.getElementById("identifyTorrentButton").addEventListener("click", async () => {
+      const source = document.getElementById("torrentLinkUrl").value.trim();
+      const output = document.getElementById("torrentInfoResult");
+      if (!source) {
+        output.textContent = "Paste the torrent download URL first.";
+        return;
+      }
+      let parsed;
+      try { parsed = new URL(source); } catch {
+        output.textContent = "Please enter a valid HTTP or HTTPS URL.";
+        return;
+      }
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        output.textContent = "Only HTTP or HTTPS torrent download URLs are supported.";
+        return;
+      }
+      const button = document.getElementById("identifyTorrentButton");
+      button.disabled = true;
+      output.textContent = "Requesting torrent metadata...";
+      try {
+        const response = await fetch(location.origin + "/torrent-info?url=" + encodeURIComponent(source));
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || "Could not identify this torrent.");
+        const heading = document.createElement("div");
+        heading.innerHTML = "<strong></strong><div></div>";
+        heading.querySelector("strong").textContent = result.name;
+        heading.querySelector("div").textContent = result.file_count + " file(s) · " + formatBytes(result.total_bytes);
+        const list = document.createElement("ol");
+        list.style.paddingLeft = "22px";
+        list.style.marginTop = "12px";
+        result.files.forEach(file => {
+          const item = document.createElement("li");
+          item.style.margin = "7px 0";
+          item.textContent = file.path + " — " + formatBytes(file.size);
+          list.appendChild(item);
+        });
+        output.replaceChildren(heading, list);
+      } catch (error) {
+        output.textContent = "Could not identify torrent: " + error.message +
+          " If the tracker requires you to be signed in, the server may not have your browser session.";
+      } finally {
+        button.disabled = false;
+      }
+    });
 
     // Download a .torrent file from a permitted HTTP(S) endpoint.
     document.getElementById("getTorrentButton").addEventListener("click", async () => {

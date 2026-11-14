@@ -222,6 +222,51 @@ class VideoGrabberHandler(SimpleHTTPRequestHandler):
                     break
                 self.wfile.write(chunk)
 
+
+    def handle_torrent_download(self, torrent_url):
+        validate_url(torrent_url)
+
+        request = Request(
+            torrent_url,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+
+        with urlopen(request, timeout=45) as response:
+            # Validate the final destination after redirects as well.
+            validate_url(response.geturl())
+            data = response.read(8 * 1024 * 1024 + 1)
+
+            if len(data) > 8 * 1024 * 1024:
+                raise ValueError("The .torrent file is larger than the 8 MB safety limit.")
+
+            # A .torrent is a bencoded dictionary containing an info dictionary.
+            if not data.startswith(b"d") or b"4:info" not in data:
+                raise ValueError(
+                    "The server did not return a valid-looking .torrent file. "
+                    "It may have returned a webpage, an error, or a different file."
+                )
+
+            disposition = response.headers.get("Content-Disposition", "")
+            disposition_message = Message()
+            disposition_message["content-disposition"] = disposition
+            filename = disposition_message.get_filename()
+            if not filename:
+                filename = unquote(os.path.basename(urlparse(response.geturl()).path))
+            filename = os.path.basename((filename or "download.torrent").replace("\\", "/"))
+            filename = re.sub(r'[^A-Za-z0-9._ -]', "_", filename).strip(" .")
+            if not filename:
+                filename = "download.torrent"
+            if not filename.lower().endswith(".torrent"):
+                filename += ".torrent"
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-bittorrent")
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
+
     def do_GET(self):
         parsed = urlparse(self.path)
         params = parse_qs(parsed.query)
@@ -260,6 +305,18 @@ class VideoGrabberHandler(SimpleHTTPRequestHandler):
                         "message": str(error),
                     }, 400)
 
+            return
+
+
+        if parsed.path == "/torrent":
+            torrent_url = params.get("url", [""])[0].strip()
+            try:
+                if not torrent_url:
+                    raise ValueError("Please provide a .torrent download URL.")
+                self.handle_torrent_download(torrent_url)
+            except Exception as error:
+                if not self.wfile.closed:
+                    self.send_json({"success": False, "message": str(error)}, 400)
             return
 
         if parsed.path == "/health":
